@@ -114,10 +114,13 @@ OpenSSH 10 no longer generates DSA keys. Replace the obsolete key type used by t
 
 ```bash
 cd ~/Downloads/Linux_for_Tegra
-sudo sed -i 's/-t dsa/-t rsa -b 2048/' \
-  tools/ota_tools/version_upgrade/ota_make_recovery_img_dtb.sh
+sudo nano tools/ota_tools/version_upgrade/ota_make_recovery_img_dtb.sh
 ```
 
+Comment out the line with dsa, which should look like:
+```bash
+# ssh-keygen -t dsa -N "" -f "${_initrd_dir}/${ssh_config_dir}/ssh_host_dsa_key" >/dev/null 2>&1;check_error
+```
 ---
 
 ## 8. (From the Host PC) Flash Jetson bootloader only using l4t_initrd_flash
@@ -149,34 +152,6 @@ Flash is successful
 Reboot device
 ```
 
-### 8.1 Ubuntu 26.04: Fix false `NFS server is not running` errors
-
-If `rpc.mountd` reports `Unable to watch /proc/fs/nfsd/clients: No space left on device`, increase the inotify limits and restart NFS:
-
-```bash
-sudo sysctl -w fs.inotify.max_user_watches=1048576
-sudo sysctl -w fs.inotify.max_user_instances=8192
-
-printf '%s\n' \
-  'fs.inotify.max_user_watches=1048576' \
-  'fs.inotify.max_user_instances=8192' | \
-  sudo tee /etc/sysctl.d/99-inotify.conf
-
-sudo systemctl restart nfs-kernel-server
-sudo systemctl start nfs-mountd.service
-```
-
-Confirm that `mountd` and NFS are available before rerunning the flash command:
-
-```bash
-sudo systemctl status nfs-mountd.service --no-pager -l
-showmount -e localhost
-sudo rpcinfo -p localhost | grep -E 'mountd|nfs'
-```
-
-`showmount` should return `Export list for localhost:` instead of `Connection refused`.
-
----
 
 ## 9. Optional: (On the Host PC) Remove the temporary UFW rule
 
