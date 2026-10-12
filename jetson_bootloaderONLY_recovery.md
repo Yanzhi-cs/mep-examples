@@ -28,6 +28,23 @@ sudo apt update
 sudo apt install -y qemu-user-static binfmt-support nfs-kernel-server sshpass abootimg
 ```
 
+### 2.1 Ubuntu 26.04 compatibility
+
+On Ubuntu 26.04, install the renamed QEMU packages and `xmllint` dependency:
+
+```bash
+sudo apt install -y qemu-user qemu-user-binfmt binfmt-support libxml2-utils \
+  nfs-kernel-server sshpass abootimg
+```
+
+If `/usr/bin/qemu-aarch64-static` is missing, provide the name expected by the NVIDIA scripts:
+
+```bash
+if [ ! -e /usr/bin/qemu-aarch64-static ]; then
+  sudo ln -s /usr/bin/qemu-aarch64 /usr/bin/qemu-aarch64-static
+fi
+```
+
 ---
 
 ## 3. (On the Host PC) Increase USB buffer size
@@ -91,6 +108,16 @@ sudo ./apply_binaries.sh
 
 The last line of output should say `L4T BSP package installation completed!`
 
+### 7.1 Ubuntu 26.04 compatibility
+
+OpenSSH 10 no longer generates DSA keys. Replace the obsolete key type used by the NVIDIA recovery-image script:
+
+```bash
+cd ~/Downloads/Linux_for_Tegra
+sudo sed -i 's/-t dsa/-t rsa -b 2048/' \
+  tools/ota_tools/version_upgrade/ota_make_recovery_img_dtb.sh
+```
+
 ---
 
 ## 8. (From the Host PC) Flash Jetson bootloader only using l4t_initrd_flash
@@ -121,6 +148,33 @@ When complete you will see:
 Flash is successful
 Reboot device
 ```
+
+### 8.1 Ubuntu 26.04: Fix false `NFS server is not running` errors
+
+If `rpc.mountd` reports `Unable to watch /proc/fs/nfsd/clients: No space left on device`, increase the inotify limits and restart NFS:
+
+```bash
+sudo sysctl -w fs.inotify.max_user_watches=1048576
+sudo sysctl -w fs.inotify.max_user_instances=8192
+
+printf '%s\n' \
+  'fs.inotify.max_user_watches=1048576' \
+  'fs.inotify.max_user_instances=8192' | \
+  sudo tee /etc/sysctl.d/99-inotify.conf
+
+sudo systemctl restart nfs-kernel-server
+sudo systemctl start nfs-mountd.service
+```
+
+Confirm that `mountd` and NFS are available before rerunning the flash command:
+
+```bash
+sudo systemctl status nfs-mountd.service --no-pager -l
+showmount -e localhost
+sudo rpcinfo -p localhost | grep -E 'mountd|nfs'
+```
+
+`showmount` should return `Export list for localhost:` instead of `Connection refused`.
 
 ---
 
